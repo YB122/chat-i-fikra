@@ -1,5 +1,6 @@
 const form = document.querySelector('form');
 form.addEventListener('submit', async (e) => {
+  console.log('form submitted');
   e.preventDefault();
   const username = document.getElementById('username').value;
   const room = document.getElementById('room').value;

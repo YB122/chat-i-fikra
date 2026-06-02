@@ -1,4 +1,4 @@
-const socket = io("https://dn4pm8b6-3001.uks1.devtunnels.ms");
+const socket = io();
 
 const chatForm = document.getElementById("chat-form");
 const chatMessages = document.querySelector(".chat-messages");
