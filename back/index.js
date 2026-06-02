@@ -87,27 +87,31 @@ io.on("connection", (socket) => {
   console.log("connected");
 
   socket.on("joinRoom", async ({ userName, room }) => {
-    const user = userJoin(socket.id, userName, room);
-    socket.join(user.room);
+    try {
+      const user = userJoin(socket.id, userName, room);
+      socket.join(user.room);
 
-    await userModel.findOneAndUpdate(
-      { name: userName, room: room },
-      { isOnline: true },
-    );
-
-    socket.emit("message", formatMessage("Chat", "Welcome back!"));
-    socket.broadcast
-      .to(user.room)
-      .emit(
-        "message",
-        formatMessage("Chat", `${user.userName} has joined the chat`),
+      await userModel.findOneAndUpdate(
+        { name: userName, room: room },
+        { isOnline: true },
       );
 
-    const allRoomUsers = await userModel.find({ room: user.room });
-    io.to(user.room).emit("roomUsers", {
-      room: user.room,
-      users: allRoomUsers,
-    });
+      socket.emit("message", formatMessage("Chat", "Welcome back!"));
+      socket.broadcast
+        .to(user.room)
+        .emit(
+          "message",
+          formatMessage("Chat", `${user.userName} has joined the chat`),
+        );
+
+      const allRoomUsers = await userModel.find({ room: user.room });
+      io.to(user.room).emit("roomUsers", {
+        room: user.room,
+        users: allRoomUsers,
+      });
+    } catch (error) {
+      console.error("joinRoom error:", error);
+    }
   });
 
   socket.on("typing", (isTyping) => {
@@ -144,25 +148,27 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", async () => {
-    const user = userLeave(socket.id);
-    if (!user) return;
+    try {
+      const user = userLeave(socket.id);
+      if (!user) return;
 
-    await userModel.findOneAndUpdate(
-      { name: user.userName, room: user.room },
-      { isOnline: false },
-    );
+      await userModel.findOneAndUpdate(
+        { name: user.userName, room: user.room },
+        { isOnline: false },
+      );
 
-    socket
-      .to(user.room)
-      .emit(
+      io.to(user.room).emit(
         "message",
         formatMessage("Chat", `${user.userName} has left the chat`),
       );
 
-    const allRoomUsers = await userModel.find({ room: user.room });
-    io.to(user.room).emit("roomUsers", {
-      room: user.room,
-      users: allRoomUsers,
-    });
+      const allRoomUsers = await userModel.find({ room: user.room });
+      io.to(user.room).emit("roomUsers", {
+        room: user.room,
+        users: allRoomUsers,
+      });
+    } catch (error) {
+      console.error("Disconnect error:", error);
+    }
   });
 });
