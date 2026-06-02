@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "start": "node --watch ./back/index.js"
+    "start": "tsx --watch ./back/index.ts",
+    "build": "tsc public/js/main.ts public/js/join.ts public/js/globals.d.ts --outDir public/js --module ESNext --target ES2022 --strict --skipLibCheck --moduleResolution bundler --ignoreConfig"
   },
   "keywords": [],
   "author": "",
@@ -28,7 +29,11 @@
     "supertest": "^7.2.2"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.1",
     "jest": "^30.3.0",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
   }
 }

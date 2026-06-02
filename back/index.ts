@@ -1,14 +1,14 @@
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Server } from "socket.io";
-import { formatMessage } from "./../utils/message.js";
+import { Server, Socket } from "socket.io";
+import { formatMessage } from "../utils/message.js";
 import {
   userJoin,
   getCurrentUser,
   userLeave,
   getRoomUsers,
-} from "./../utils/users.js";
+} from "../utils/users.js";
 
 import { dataBaseConnection } from "./database/connection.js";
 import { userModel } from "./database/model/user.model.js";
@@ -17,7 +17,7 @@ import { messageModel } from "./database/model/message.model.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let app = express();
+const app = express();
 app.use(express.json());
 
 app.use(express.static(path.join(__dirname, "../public")));
@@ -25,11 +25,11 @@ dataBaseConnection();
 
 app.post("/go-to-room", async (req, res) => {
   const { name, room } = req.body;
-  let userFound = await userModel.findOne({ name, room });
+  const userFound = await userModel.findOne({ name, room });
   if (userFound) {
     return res.status(201).json({ message: "user existed", data: userFound });
   }
-  let newUser = await userModel.insertMany({ name, room });
+  const newUser = await userModel.insertMany({ name, room });
   if (newUser) {
     res.status(200).json({ message: "done, user added", data: newUser });
   } else {
@@ -40,9 +40,9 @@ app.post("/go-to-room", async (req, res) => {
 app.get("/all-messages-for-room", async (req, res) => {
   const { room } = req.query;
   try {
-    let messages = await messageModel
+    const messages = await messageModel
       .find({ room })
-      .populate('userId')
+      .populate("userId")
       .sort({ createdAt: 1 });
     if (messages.length >= 0) {
       res.status(200).json({ message: "chat found", data: messages });
@@ -56,9 +56,9 @@ app.get("/all-messages-for-room", async (req, res) => {
 
 app.post("/add-message", async (req, res) => {
   const { name, room, content } = req.body;
-  let user = await userModel.findOne({ name, room });
+  const user = await userModel.findOne({ name, room });
   if (user) {
-    let newMessage = await messageModel.insertMany({
+    const newMessage = await messageModel.insertMany({
       room,
       content,
       userId: user._id,
@@ -83,16 +83,16 @@ const io = new Server(server, {
   },
 });
 
-io.on("connection", (socket) => {
+io.on("connection", (socket: Socket) => {
   console.log("connected");
 
-  socket.on("joinRoom", async ({ userName, room }) => {
+  socket.on("joinRoom", async ({ userName, room }: { userName: string; room: string }) => {
     try {
       const user = userJoin(socket.id, userName, room);
       socket.join(user.room);
 
       await userModel.findOneAndUpdate(
-        { name: userName, room: room },
+        { name: userName, room },
         { isOnline: true },
       );
 
@@ -114,7 +114,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("typing", (isTyping) => {
+  socket.on("typing", (isTyping: boolean) => {
     const user = getCurrentUser(socket.id);
     if (user) {
       socket.broadcast.to(user.room).emit("displayTyping", {
@@ -124,13 +124,12 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("chatMessage", (msg) => {
+  socket.on("chatMessage", (msg: string) => {
     const user = getCurrentUser(socket.id);
     if (user) {
       const formattedMessage = formatMessage(`${user.userName}`, msg);
 
       io.to(user.room).emit("message", formattedMessage);
-
 
       userModel
         .findOne({ name: user.userName, room: user.room })
