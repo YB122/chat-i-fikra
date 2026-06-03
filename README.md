@@ -1,184 +1,121 @@
-# SkyChat - Modern Real-time Chat Application
+# SkyChat - Real-time Chat Application
 
-A beautiful, feature-rich real-time chat application built with Node.js, Express, Socket.io, and MongoDB. SkyChat offers a modern space-themed UI with smooth animations and a seamless chatting experience.
+A real-time chat app with a space-themed UI built with TypeScript, Node.js, Express, Socket.io, and MongoDB.
 
-## 🚀 Features
+## Features
 
-### Core Functionality
+- **Real-time messaging** via Socket.io
+- **Room-based chat** — join any room by name
+- **Online/offline status** — live user list with status badges
+- **Message history** — persisted in MongoDB
+- **Typing indicators** — see who's typing
+- **Join/leave notifications** — broadcast to the room
+- **Space-themed UI** — animated stars and meteors
 
-- **Real-time Messaging**: Instant message delivery using Socket.io
-- **Room-based Chat**: Users can join different chat rooms
-- **User Management**: Online/offline status tracking
-- **Message History**: Persistent message storage in MongoDB
-- **Typing Indicators**: See when other users are typing
+## Tech Stack
 
-### User Experience
+| Layer | Technology |
+|-------|-----------|
+| Language | TypeScript |
+| Backend | Node.js, Express 5 |
+| Real-time | Socket.io |
+| Database | MongoDB + Mongoose |
+| Frontend | Vanilla TypeScript (compiled to JS) |
 
-- **Beautiful Space-themed UI**: Stunning animated background with stars and meteors
-- **Responsive Design**: Works seamlessly on desktop and mobile devices
-- **Real-time User List**: See who's currently online in your room
-- **Join/Leave Notifications**: Get notified when users enter or leave the chat
+## Prerequisites
 
-## 🛠️ Technology Stack
+- Node.js v18+
+- MongoDB (Atlas or local)
 
-### Backend
+## Setup
 
-- **Node.js** - JavaScript runtime
-- **Express.js** - Web framework
-- **Socket.io** - Real-time communication
-- **MongoDB** - Database for user and message storage
-- **Mongoose** - MongoDB object modeling
+```bash
+# 1. Install dependencies
+npm install
 
-### Frontend
+# 2. Create .env file
+#    Add your MongoDB connection string:
+echo "DATA_BASE=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/?appName=Cluster0" > .env
 
-- **HTML5/CSS3** - Modern web standards
-- **JavaScript (ES6+)** - Client-side functionality
-- **Font Awesome** - Icon library
-- **CSS Animations** - Custom space-themed animations
+# 3. Build frontend (compile .ts → .js)
+npm run build
 
-## 📋 Prerequisites
+# 4. Start the server
+npm start
+```
 
-- Node.js (v16 or higher)
-- MongoDB (local or cloud instance)
-- npm or yarn package manager
+The server runs on **http://localhost:3002**.
 
-## 🚀 Installation & Setup
-
-1. **Clone the repository**
-
-   ```bash
-   git clone <repository-url>
-   cd chat/socket
-   ```
-
-2. **Install dependencies**
-
-   ```bash
-   npm install
-   ```
-
-3. **Environment Setup**
-   - Create a `.env` file in the root directory
-   - Add your MongoDB connection string:
-
-   ```
-   MONGODB_URI=mongodb://localhost:27017/skychat
-   ```
-
-4. **Start the application**
-
-   ```bash
-   npm start
-   ```
-
-5. **Access the application**
-   - Open your browser and navigate to `http://localhost:3000`
-
-## 🏗️ Project Structure
+## Project Structure
 
 ```
-chat/socket/
 ├── back/
-│   ├── database/
-│   │   ├── connection.js          # MongoDB connection
-│   │   └── model/
-│   │       ├── user.model.js      # User schema
-│   │       └── message.model.js   # Message schema
-│   └── index.js                   # Main server file
+│   ├── index.ts                  # Express server + Socket.io
+│   └── database/
+│       ├── connection.ts         # MongoDB connection
+│       └── model/
+│           ├── user.model.ts     # User schema
+│           └── message.model.ts  # Message schema
 ├── public/
-│   ├── css/
-│   │   └── style.css              # Styling and animations
-│   ├── js/
-│   │   └── chat.js                # Client-side Socket.io logic
-│   ├── index.html                 # Main chat interface
-│   └── chat.html                  # Chat room interface
+│   ├── index.html                # Join page
+│   ├── chat.html                 # Chat room page
+│   ├── css/style.css             # Styles + animations
+│   └── js/
+│       ├── main.ts               # Chat client logic
+│       ├── join.ts               # Join form logic
+│       ├── globals.d.ts          # Ambient type declarations
+│       ├── main.js               # Compiled output
+│       └── join.js               # Compiled output
 ├── utils/
-│   ├── message.js                 # Message formatting utilities
-│   └── users.js                   # User management utilities
-├── package.json                   # Dependencies and scripts
-└── README.md                      # This file
+│   ├── message.ts                # Message formatting
+│   └── users.ts                  # In-memory user store
+├── .env                          # Environment variables
+├── tsconfig.json                 # Backend TS config
+├── tsconfig.frontend.json        # Frontend TS config
+└── package.json
 ```
 
-## 💾 API Endpoints
+## Scripts
 
-### User Management
+| Command | Description |
+|---------|-------------|
+| `npm start` | Run server with hot-reload (`tsx --watch`) |
+| `npm run build` | Compile frontend `.ts` → `.js` |
+| `npm test` | Run Jest tests |
 
-- `POST /go-to-room` - Join or create a user in a room
-- `GET /all-messages-for-room?room=<roomName>` - Get all messages for a room
-- `POST /add-message` - Add a new message to the database
+## API Endpoints
 
-### Socket.io Events
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/go-to-room` | Join or create a user in a room |
+| GET | `/all-messages-for-room?room=` | Get message history for a room |
+| POST | `/add-message` | Save a message to the database |
 
-- `joinRoom` - Join a chat room
-- `chatMessage` - Send a chat message
-- `typing` - Broadcast typing status
-- `disconnect` - Handle user disconnection
+## Socket.io Events
 
-## 🎮 Usage
+### Client → Server
+- `joinRoom` — `{ userName, room }`
+- `chatMessage` — `string`
+- `typing` — `boolean`
 
-1. **Enter Chat Room**
-   - Open the application in your browser
-   - Enter your name and desired room name
-   - Click "Join Chat"
+### Server → Client
+- `message` — `{ userName, text, time }`
+- `roomUsers` — `{ room, users[] }`
+- `displayTyping` — `{ userName, isTyping }`
 
-2. **Start Chatting**
-   - Type your message in the input field
-   - Press Enter or click Send to deliver your message
-   - See real-time updates as other users join and chat
+## Development
 
-3. **Room Features**
-   - View all online users in the current room
-   - See typing indicators when others are composing messages
-   - Receive notifications when users join or leave
+```bash
+# Start the dev server with file watching
+npm start
 
-## 🎨 UI Features
+# Compile frontend TypeScript after editing .ts files
+npm run build
 
-- **Animated Space Background**: Dynamic stars and meteors
-- **Smooth Transitions**: CSS animations for better UX
-- **Responsive Layout**: Adapts to different screen sizes
-- **Modern Color Scheme**: Dark theme with vibrant accents
+# Type-check backend
+npx tsc --noEmit
+```
 
-## 🔧 Development
+## License
 
-### Available Scripts
-
-- `npm start` - Start the development server with file watching
-- `npm test` - Run Jest tests (if configured)
-
-### Key Files to Modify
-
-- `back/index.js` - Server logic and Socket.io events
-- `public/js/chat.js` - Client-side chat functionality
-- `public/css/style.css` - Styling and animations
-- `back/database/model/` - Database schemas
-
-## 📱 Demo Video
-
-[![SkyChat Demo](https://img.youtube.com/vi/AVVwuyVG7D8/0.jpg)](https://www.youtube.com/watch?v=AVVwuyVG7D8)
-
-_Click the thumbnail above to watch the full demonstration on YouTube_
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the ISC License - see the package.json file for details.
-
-## 🙏 Acknowledgments
-
-- Socket.io team for the excellent real-time communication library
-- MongoDB for the robust database solution
-- Font Awesome for the beautiful icon set
-- The open-source community for inspiration and tools
-
----
-
-**Happy Chatting! 🚀✨**
-
-Made with ❤️ and lots of ☕
+ISC
