@@ -11,7 +11,6 @@ export const createRoutes = (chatController: ChatController): Router => {
   router.post("/go-to-room", chatController.goToRoom);
   router.get("/all-messages-for-room", chatController.allMessagesForRoom);
   router.post("/upload-file", upload.single("file"), chatController.uploadFile);
-  router.post("/add-message", chatController.addMessage);
 
   return router;
 };

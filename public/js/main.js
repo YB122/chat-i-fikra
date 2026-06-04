@@ -1,5 +1,6 @@
 "use strict";
-const socket = io();
+// const socket = io();
+const socket = io("https://nd1cgptf-3002.uks1.devtunnels.ms");
 const chatForm = document.getElementById("chat-form");
 const chatMessages = document.querySelector(".chat-messages");
 const fileInput = document.getElementById("file-input");
