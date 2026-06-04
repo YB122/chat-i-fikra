@@ -1,6 +1,6 @@
-const socket = io("https://nd1cgptf-3002.uks1.devtunnels.ms");
 // const socket = io();
 
+const socket = io("https://nd1cgptf-3002.uks1.devtunnels.ms");
 const chatForm = document.getElementById("chat-form") as HTMLFormElement;
 const chatMessages = document.querySelector(".chat-messages") as HTMLElement;
 const fileInput = document.getElementById("file-input") as HTMLInputElement;
@@ -14,7 +14,12 @@ const room = urlParams.get("room")!;
 document.getElementById("room-name")!.innerText = room;
 document.title = `SkyChat | ${room}`;
 
-socket.emit("joinRoom", { userName: username, room });
+socket.on("connect", () => {
+  socket.emit("joinRoom", { userName: username, room });
+});
+
+let isReady = false;
+socket.on("joinedRoom", () => { isReady = true; });
 
 // --- Audio Recording (press & hold like WhatsApp) ---
 let mediaRecorder: MediaRecorder | null = null;

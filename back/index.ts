@@ -35,16 +35,17 @@ app.use(express.static(path.join(__dirname, "../public")));
 dataBaseConnection();
 
 app.post("/go-to-room", async (req, res) => {
-  const { name, room } = req.body;
-  const userFound = await userModel.findOne({ name, room });
-  if (userFound) {
-    return res.status(201).json({ message: "user existed", data: userFound });
-  }
-  const newUser = await userModel.insertMany({ name, room });
-  if (newUser) {
-    res.status(200).json({ message: "done, user added", data: newUser });
-  } else {
-    res.status(400).json({ message: "failed" });
+  try {
+    const { name, room } = req.body;
+    const userFound = await userModel.findOne({ name, room });
+    if (userFound) {
+      return res.status(201).json({ message: "user existed", data: userFound });
+    }
+    await userModel.create({ name, room });
+    res.status(200).json({ message: "done, user added" });
+  } catch (error) {
+    console.error("go-to-room error:", error);
+    res.status(500).json({ message: "server error" });
   }
 });
 
@@ -147,7 +148,8 @@ io.on("connection", (socket: Socket) => {
           { isOnline: true },
         );
 
-        socket.emit("message", formatMessage("Chat", "Welcome back!"));
+        socket.emit("joinedRoom", { room: user.room });
+      socket.emit("message", formatMessage("Chat", "Welcome back!"));
         socket.broadcast
           .to(user.room)
           .emit(
