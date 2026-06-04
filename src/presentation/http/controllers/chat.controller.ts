@@ -37,7 +37,7 @@ export class ChatController {
       return res.status(200).json({
         url: uploadResult.secure_url,
         publicId: uploadResult.public_id,
-        type: mime.startsWith("image/") ? "image" : mime.startsWith("audio/") ? "audio" : "file",
+        type: mime.startsWith("image/") ? "image" : mime.startsWith("audio/") ? "audio" : mime.startsWith("video/") ? "video" : "file",
         name: req.file.originalname,
       });
     } catch (error) {

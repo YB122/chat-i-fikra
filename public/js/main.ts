@@ -1,6 +1,4 @@
-// const socket = io("https://nd1cgptf-3002.uks1.devtunnels.ms");
 const socket = io();
-
 const chatForm = document.getElementById("chat-form") as HTMLFormElement;
 const chatMessages = document.querySelector(".chat-messages") as HTMLElement;
 const fileInput = document.getElementById("file-input") as HTMLInputElement;
@@ -14,7 +12,12 @@ const room = urlParams.get("room")!;
 document.getElementById("room-name")!.innerText = room;
 document.title = `SkyChat | ${room}`;
 
-socket.emit("joinRoom", { userName: username, room });
+socket.on("connect", () => {
+  socket.emit("joinRoom", { userName: username, room });
+});
+
+let isReady = false;
+socket.on("joinedRoom", () => { isReady = true; });
 
 // --- Audio Recording (press & hold like WhatsApp) ---
 let mediaRecorder: MediaRecorder | null = null;
@@ -127,7 +130,7 @@ async function fetchMessages(): Promise<void> {
       chatMessages.innerHTML = "";
       result.data.forEach((msg: any) => {
         const file = msg.file
-          ? { url: msg.file.url, publicId: msg.file.publicId, type: msg.file.type as "image" | "file" | "audio", name: msg.file.name }
+          ? { url: msg.file.url, publicId: msg.file.publicId, type: msg.file.type as "image" | "file" | "audio" | "video", name: msg.file.name }
           : undefined;
         outputMessage({
           userName: msg.userId ? msg.userId.name : "System",
@@ -241,7 +244,7 @@ chatForm.addEventListener("submit", async (e: Event) => {
 interface FileAttachment {
   url: string;
   publicId: string;
-  type: "image" | "file" | "audio";
+  type: "image" | "file" | "audio" | "video";
   name: string;
 }
 
@@ -273,8 +276,10 @@ function outputMessage(message: ChatMessage): void {
         <i class="fas fa-microphone audio-icon"></i>
         <audio controls src="${message.file.url}" class="chat-audio"></audio>
       </div>`;
+    } else if (message.file.type === "video") {
+      fileHtml = `<div class="file-attachment"><video controls src="${message.file.url}" class="chat-video"></video></div>`;
     } else {
-      fileHtml = `<div class="file-attachment"><a href="${message.file.url}" target="_blank" class="file-link"><i class="fas fa-file"></i> ${message.file.name}</a></div>`;
+      fileHtml = `<div class="file-attachment"><a href="${message.file.url}" target="_blank" rel="noopener noreferrer" class="file-link"><i class="fas fa-file"></i> ${message.file.name}</a></div>`;
     }
   }
 
