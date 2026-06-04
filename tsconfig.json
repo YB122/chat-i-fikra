@@ -8,12 +8,14 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
-    "rootDir": ".",
-    "noEmit": true
+    "rootDir": "./src",  
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
   },
   "include": [
-    "back/**/*.ts",
-    "utils/**/*.ts"
+    "src/**/*.ts",  
+    "../utils/**/*.ts"  
   ],
   "exclude": [
     "node_modules",

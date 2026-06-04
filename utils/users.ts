@@ -1,28 +1,28 @@
-interface User {
+interface SocketUser {
   id: string;
   userName: string;
   room: string;
 }
 
-const users: User[] = [];
+const users: SocketUser[] = [];
 
-export function userJoin(id: string, userName: string, room: string): User {
-  const user: User = { id, userName, room };
+export const userJoin = (id: string, userName: string, room: string): SocketUser => {
+  const user = { id, userName, room };
   users.push(user);
   return user;
-}
+};
 
-export function getCurrentUser(id: string): User | undefined {
+export const getCurrentUser = (id: string): SocketUser | undefined => {
   return users.find((user) => user.id === id);
-}
+};
 
-export function userLeave(id: string): User | undefined {
+export const userLeave = (id: string): SocketUser | undefined => {
   const index = users.findIndex((user) => user.id === id);
   if (index !== -1) {
     return users.splice(index, 1)[0];
   }
-}
+};
 
-export function getRoomUsers(room: string): User[] {
+export const getRoomUsers = (room: string): SocketUser[] => {
   return users.filter((user) => user.room === room);
-}
+};
