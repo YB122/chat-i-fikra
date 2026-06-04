@@ -235,8 +235,11 @@ function outputMessage(message) {
         <audio controls src="${message.file.url}" class="chat-audio"></audio>
       </div>`;
         }
+        else if (message.file.type === "video") {
+            fileHtml = `<div class="file-attachment"><video controls src="${message.file.url}" class="chat-video"></video></div>`;
+        }
         else {
-            fileHtml = `<div class="file-attachment"><a href="${message.file.url}" target="_blank" class="file-link"><i class="fas fa-file"></i> ${message.file.name}</a></div>`;
+            fileHtml = `<div class="file-attachment"><a href="${message.file.url}" target="_blank" rel="noopener noreferrer" class="file-link"><i class="fas fa-file"></i> ${message.file.name}</a></div>`;
         }
     }
     const textHtml = message.text ? `<p class="text">${message.text}</p>` : "";
