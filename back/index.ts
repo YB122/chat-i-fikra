@@ -2,6 +2,8 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server, Socket } from "socket.io";
+import { v2 as cloudinary } from "cloudinary";
+import multer from "multer";
 import { formatMessage } from "../utils/message.js";
 import {
   userJoin,
@@ -16,6 +18,15 @@ import { messageModel } from "./database/model/message.model.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_API_KEY,
+  api_secret: process.env.CLOUD_API_SECRET,
+});
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 const app = express();
 app.use(express.json());
@@ -54,15 +65,43 @@ app.get("/all-messages-for-room", async (req, res) => {
   }
 });
 
+app.post("/upload-file", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "no file uploaded" });
+    }
+    const fileStr = req.file.buffer.toString("base64");
+    const dataUri = `data:${req.file.mimetype};base64,${fileStr}`;
+
+    const mime = req.file.mimetype;
+    const isImage = mime.startsWith("image/");
+    const isAudio = mime.startsWith("audio/");
+    const uploadResult = await cloudinary.uploader.upload(dataUri, {
+      resource_type: "auto",
+      folder: "skychat",
+    });
+
+    res.status(200).json({
+      url: uploadResult.secure_url,
+      publicId: uploadResult.public_id,
+      type: isImage ? "image" : isAudio ? "audio" : "file",
+      name: req.file.originalname,
+    });
+  } catch (error) {
+    console.error("Upload error:", error);
+    res.status(500).json({ message: "upload failed" });
+  }
+});
+
 app.post("/add-message", async (req, res) => {
-  const { name, room, content } = req.body;
+  const { name, room, content, file } = req.body;
   const user = await userModel.findOne({ name, room });
   if (user) {
-    const newMessage = await messageModel.insertMany({
-      room,
-      content,
-      userId: user._id,
-    });
+    const messageData: Record<string, any> = { room, userId: user._id };
+    if (content) messageData.content = content;
+    if (file) messageData.file = file;
+
+    const newMessage = await messageModel.insertMany(messageData);
     if (newMessage) {
       res.status(200).json({ message: "message write done", data: newMessage });
     } else {
@@ -83,36 +122,46 @@ const io = new Server(server, {
   },
 });
 
+interface FilePayload {
+  url: string;
+  publicId: string;
+  type: "image" | "file" | "audio";
+  name: string;
+}
+
 io.on("connection", (socket: Socket) => {
   console.log("connected");
 
-  socket.on("joinRoom", async ({ userName, room }: { userName: string; room: string }) => {
-    try {
-      const user = userJoin(socket.id, userName, room);
-      socket.join(user.room);
+  socket.on(
+    "joinRoom",
+    async ({ userName, room }: { userName: string; room: string }) => {
+      try {
+        const user = userJoin(socket.id, userName, room);
+        socket.join(user.room);
 
-      await userModel.findOneAndUpdate(
-        { name: userName, room },
-        { isOnline: true },
-      );
-
-      socket.emit("message", formatMessage("Chat", "Welcome back!"));
-      socket.broadcast
-        .to(user.room)
-        .emit(
-          "message",
-          formatMessage("Chat", `${user.userName} has joined the chat`),
+        await userModel.findOneAndUpdate(
+          { name: userName, room },
+          { isOnline: true },
         );
 
-      const allRoomUsers = await userModel.find({ room: user.room });
-      io.to(user.room).emit("roomUsers", {
-        room: user.room,
-        users: allRoomUsers,
-      });
-    } catch (error) {
-      console.error("joinRoom error:", error);
-    }
-  });
+        socket.emit("message", formatMessage("Chat", "Welcome back!"));
+        socket.broadcast
+          .to(user.room)
+          .emit(
+            "message",
+            formatMessage("Chat", `${user.userName} has joined the chat`),
+          );
+
+        const allRoomUsers = await userModel.find({ room: user.room });
+        io.to(user.room).emit("roomUsers", {
+          room: user.room,
+          users: allRoomUsers,
+        });
+      } catch (error) {
+        console.error("joinRoom error:", error);
+      }
+    },
+  );
 
   socket.on("typing", (isTyping: boolean) => {
     const user = getCurrentUser(socket.id);
@@ -124,26 +173,33 @@ io.on("connection", (socket: Socket) => {
     }
   });
 
-  socket.on("chatMessage", (msg: string) => {
+  socket.on("chatMessage", (msg: string | { text: string; file: FilePayload }) => {
     const user = getCurrentUser(socket.id);
-    if (user) {
-      const formattedMessage = formatMessage(`${user.userName}`, msg);
+    if (!user) return;
 
-      io.to(user.room).emit("message", formattedMessage);
+    const text = typeof msg === "string" ? msg : msg.text;
+    const file = typeof msg === "object" ? msg.file : undefined;
 
-      userModel
-        .findOne({ name: user.userName, room: user.room })
-        .then((dbUser) => {
-          if (dbUser) {
-            return messageModel.create({
-              room: user.room,
-              content: msg,
-              userId: dbUser._id,
-            });
-          }
-        })
-        .catch((err) => console.error("Error saving message:", err));
-    }
+    const formattedMessage = file
+      ? { userName: user.userName, text, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), file }
+      : formatMessage(user.userName, text);
+
+    io.to(user.room).emit("message", formattedMessage);
+
+    userModel
+      .findOne({ name: user.userName, room: user.room })
+      .then((dbUser) => {
+        if (dbUser) {
+          const messageData: Record<string, any> = {
+            room: user.room,
+            userId: dbUser._id,
+          };
+          if (text) messageData.content = text;
+          if (file) messageData.file = file;
+          return messageModel.create(messageData);
+        }
+      })
+      .catch((err) => console.error("Error saving message:", err));
   });
 
   socket.on("disconnect", async () => {

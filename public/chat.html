@@ -126,14 +126,30 @@
       <div class="chat-form-container">
         <form id="chat-form">
           <div id="typing-indicator"></div>
-          <input
-            id="msg"
-            type="text"
-            placeholder="Type your message..."
-            required
-            autocomplete="off"
-          />
-          <button class="btn"><i class="fas fa-paper-plane"></i> Send</button>
+          <div class="input-row">
+            <label for="file-input" class="btn-file">
+              <i class="fas fa-paperclip"></i>
+            </label>
+            <input id="file-input" type="file" hidden />
+            <button id="record-btn" class="btn-file" type="button">
+              <i class="fas fa-microphone"></i>
+            </button>
+            <input
+              id="msg"
+              type="text"
+              placeholder="Type your message..."
+              autocomplete="off"
+            />
+            <button class="btn"><i class="fas fa-paper-plane"></i> Send</button>
+          </div>
+          <div id="file-preview" class="file-preview hidden"></div>
+          <div id="recording-bar" class="recording-bar hidden">
+            <div class="recording-wave">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <span class="recording-timer" id="recording-timer">0:00</span>
+            <span class="recording-label">Recording...</span>
+          </div>
         </form>
       </div>
     </div>
