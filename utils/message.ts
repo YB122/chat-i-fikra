@@ -1,11 +1,13 @@
-import moment from "moment";
-
-export interface MessageFormat {
+export interface FormattedMessage {
   userName: string;
   text: string;
   time: string;
 }
 
-export function formatMessage(userName: string, text: string): MessageFormat {
-  return { userName, text, time: moment().format("h:mm a") };
-}
+export const formatMessage = (userName: string, text: string): FormattedMessage => {
+  return {
+    userName,
+    text,
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  };
+};

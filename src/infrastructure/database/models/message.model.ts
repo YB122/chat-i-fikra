@@ -10,15 +10,27 @@ export interface IFileAttachment {
 export interface IMessage extends Document {
   content: string;
   room: string;
-  userId: Types.ObjectId;
+  userId: Types.ObjectId; 
   file?: IFileAttachment;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const messageSchema = new Schema<IMessage>(
   {
-    content: { type: String, default: "" },
-    room: { type: String, required: true },
-    userId: { type: Schema.Types.ObjectId, ref: "users", required: true },
+    content: { 
+      type: String, 
+      default: "" 
+    },
+    room: { 
+      type: String, 
+      required: true 
+    },
+    userId: { 
+      type: Schema.Types.ObjectId, 
+      ref: "users", 
+      required: true 
+    },
     file: {
       url: { type: String },
       publicId: { type: String },
@@ -26,7 +38,9 @@ const messageSchema = new Schema<IMessage>(
       name: { type: String },
     },
   },
-  { timestamps: true },
+  { 
+    timestamps: true 
+  }
 );
 
 export const messageModel = mongoose.model<IMessage>("messages", messageSchema);

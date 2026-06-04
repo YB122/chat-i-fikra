@@ -1,40 +1,25 @@
 {
-  "name": "ifikra-chat",
+  "name": "skychat",
   "version": "1.0.0",
-  "description": "ifikra chat application",
-  "main": "index.js",
-  "scripts": {
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "start": "tsx --watch ./back/index.ts",
-    "build": "tsc public/js/main.ts public/js/join.ts public/js/globals.d.ts --outDir public/js --module ESNext --target ES2022 --strict --skipLibCheck --moduleResolution bundler --ignoreConfig"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "description": "Real-time chat app with file sharing, voice recording, and clean architecture",
   "type": "module",
+  "scripts": {
+    "start": "tsx --watch ./src/index.ts",
+    "build": "tsc public/js/main.ts public/js/join.ts public/js/globals.d.ts --outDir public/js --module ESNext --target ES2022 --strict --skipLibCheck --moduleResolution bundler --ignoreConfig",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
-    "bcrypt": "^6.0.0",
-    "bootstrap": "^5.3.8",
     "cloudinary": "^2.10.0",
     "dotenv": "^17.3.1",
-    "ejs": "^5.0.1",
     "express": "^5.2.1",
-    "joi": "^18.1.1",
-    "jsonwebtoken": "^9.0.3",
-    "moment": "^2.30.1",
     "mongoose": "^9.3.2",
     "multer": "^2.1.1",
-    "nodemailer": "^8.0.4",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
-    "supertest": "^7.2.2"
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.9.1",
-    "jest": "^30.3.0",
-    "nodemon": "^3.1.14",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }

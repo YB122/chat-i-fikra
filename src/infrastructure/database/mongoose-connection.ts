@@ -7,6 +7,6 @@ dns.setServers(["8.8.8.8", "8.8.8.4"]);
 export const dataBaseConnection = (): void => {
   mongoose
     .connect(process.env.DATA_BASE!)
-    .then(() => console.log("data base connected"))
-    .catch((err) => console.log(err));
+    .then(() => console.log("Database connected successfully "))
+    .catch((err) => console.error("Database connection error:", err));
 };
