@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "start": "tsx --watch ./back/index.ts",
+    "start": "tsx --watch ./src/index.ts",
     "build": "tsc public/js/main.ts public/js/join.ts public/js/globals.d.ts --outDir public/js --module ESNext --target ES2022 --strict --skipLibCheck --moduleResolution bundler --ignoreConfig"
   },
   "keywords": [],

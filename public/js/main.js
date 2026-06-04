@@ -181,8 +181,6 @@ fileInput.addEventListener("change", () => {
 });
 chatForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!isReady)
-        return;
     const msg = e.target.elements.namedItem("msg");
     const file = fileInput.files?.[0];
     if (file) {
