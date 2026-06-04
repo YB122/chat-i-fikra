@@ -1,5 +1,5 @@
-// const socket = io("https://nd1cgptf-3002.uks1.devtunnels.ms");
-const socket = io();
+const socket = io("https://nd1cgptf-3002.uks1.devtunnels.ms");
+// const socket = io();
 
 const chatForm = document.getElementById("chat-form") as HTMLFormElement;
 const chatMessages = document.querySelector(".chat-messages") as HTMLElement;
@@ -19,7 +19,12 @@ socket.on("connect", () => {
 });
 
 let isReady = false;
-socket.on("joinedRoom", () => { isReady = true; });
+
+// ✅ FIX 1: fetch messages only after confirmed room join
+socket.on("joinedRoom", () => {
+  isReady = true;
+  fetchMessages();
+});
 
 // --- Audio Recording (press & hold like WhatsApp) ---
 let mediaRecorder: MediaRecorder | null = null;
@@ -151,7 +156,7 @@ async function fetchMessages(): Promise<void> {
   }
 }
 
-fetchMessages();
+// ✅ FIX 1: fetchMessages() removed from here — now called inside joinedRoom above
 
 socket.on("roomUsers", ({ room, users }: { room: string; users: any[] }) => {
   outputRoomName(room);
@@ -235,7 +240,8 @@ chatForm.addEventListener("submit", async (e: Event) => {
       console.error("Upload error:", error);
     }
   } else if (msg.value.trim()) {
-    socket.emit("chatMessage", msg.value);
+    // ✅ FIX 2: emit consistent object format instead of plain string
+    socket.emit("chatMessage", { text: msg.value, file: null });
   }
 
   socket.emit("typing", false);
