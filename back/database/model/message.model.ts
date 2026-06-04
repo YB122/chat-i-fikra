@@ -3,7 +3,7 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 export interface IFileAttachment {
   url: string;
   publicId: string;
-  type: "image" | "file";
+  type: "image" | "file" | "audio" | "video";
   name: string;
 }
 
@@ -22,7 +22,7 @@ const messageSchema = new Schema<IMessage>(
     file: {
       url: { type: String },
       publicId: { type: String },
-      type: { type: String, enum: ["image", "file", "audio"] },
+      type: { type: String, enum: ["image", "file", "audio", "video"] },
       name: { type: String },
     },
   },

@@ -76,15 +76,18 @@ app.post("/upload-file", upload.single("file"), async (req, res) => {
     const mime = req.file.mimetype;
     const isImage = mime.startsWith("image/");
     const isAudio = mime.startsWith("audio/");
+    const isVideo = mime.startsWith("video/");
+    const parsed = path.parse(req.file.originalname);
     const uploadResult = await cloudinary.uploader.upload(dataUri, {
       resource_type: "auto",
       folder: "skychat",
+      public_id: `${parsed.name}-${Date.now()}${parsed.ext}`,
     });
 
     res.status(200).json({
       url: uploadResult.secure_url,
       publicId: uploadResult.public_id,
-      type: isImage ? "image" : isAudio ? "audio" : "file",
+      type: isImage ? "image" : isAudio ? "audio" : isVideo ? "video" : "file",
       name: req.file.originalname,
     });
   } catch (error) {

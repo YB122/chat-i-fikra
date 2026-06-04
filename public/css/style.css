@@ -412,6 +412,15 @@ a {
 	transform: scale(1.02);
 }
 
+.chat-video {
+	max-width: 300px;
+	max-height: 300px;
+	border-radius: 10px;
+	display: block;
+	margin-top: 6px;
+	background: #000;
+}
+
 .file-link {
 	color: var(--accent-color);
 	text-decoration: none;
