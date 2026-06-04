@@ -6,6 +6,9 @@ import { dataBaseConnection } from "./infrastructure/database/mongoose-connectio
 import { MongoUserRepository } from "./infrastructure/repositories/mongo-user.repository.ts";
 import { MongoMessageRepository } from "./infrastructure/repositories/mongo-message.repository.ts";
 import { CloudinaryService } from "./infrastructure/services/cloudinary.service.ts";
+import { GoToRoomUseCase } from "./application/use-cases/go-to-room.use-case.ts";
+import { SaveMessageUseCase } from "./application/use-cases/save-message.use-case.ts";
+import { GetRoomMessagesUseCase } from "./application/use-cases/get-room-messages.use-case.ts";
 import { ChatController } from "./presentation/http/controllers/chat.controller.ts";
 import { createRoutes } from "./presentation/http/routes.ts";
 import { ChatGateway } from "./presentation/sockets/chat.gateway.ts";
@@ -19,11 +22,18 @@ app.use(express.static(path.join(__dirname, "../public")));
 
 dataBaseConnection();
 
+// 1. Infrastructure Instances
 const userRepository = new MongoUserRepository();
 const messageRepository = new MongoMessageRepository();
 const cloudinaryService = new CloudinaryService();
 
-const chatController = new ChatController(userRepository, messageRepository, cloudinaryService);
+// 2. Application Use Cases Instances
+const goToRoomUseCase = new GoToRoomUseCase(userRepository);
+const saveMessageUseCase = new SaveMessageUseCase(messageRepository, userRepository);
+const getRoomMessagesUseCase = new GetRoomMessagesUseCase(messageRepository);
+
+// 3. Presentation Controller (نمرر له الـ 2 use cases والـ service)
+const chatController = new ChatController(goToRoomUseCase, getRoomMessagesUseCase, cloudinaryService);
 
 app.use(createRoutes(chatController));
 
@@ -32,4 +42,6 @@ const server = app.listen(3002, () => {
 });
 
 const io = new Server(server, { cors: { origin: "*" } });
-new ChatGateway(io, userRepository, messageRepository);
+
+// 4. Presentation Sockets Gateway
+new ChatGateway(io, userRepository, saveMessageUseCase);

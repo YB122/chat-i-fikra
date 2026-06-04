@@ -1,4 +1,5 @@
-const socket = io();
+// const socket = io();
+const socket = io("https://nd1cgptf-3002.uks1.devtunnels.ms");
 const chatForm = document.getElementById("chat-form") as HTMLFormElement;
 const chatMessages = document.querySelector(".chat-messages") as HTMLElement;
 const fileInput = document.getElementById("file-input") as HTMLInputElement;

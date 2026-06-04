@@ -1,15 +1,18 @@
 import { Server, Socket } from "socket.io";
 import { UserRepository } from "../../domain/repositories/user.repository.ts";
-import { MessageRepository } from "../../domain/repositories/message.repository.ts";
-import { formatMessage } from "../../../utils/message.js";
-import { userJoin, getCurrentUser, userLeave } from "../../../utils/users.js";
+import { SaveMessageUseCase } from "../../application/use-cases/save-message.use-case.ts";
+import { formatMessage } from "../../../utils/message.ts";
+import { userJoin, getCurrentUser, userLeave } from "../../../utils/users.ts";
 
 export class ChatGateway {
-  constructor(
-    private io: Server,
-    private userRepo: UserRepository,
-    private messageRepo: MessageRepository
-  ) {
+  private io: Server;
+  private userRepo: UserRepository;
+  private saveMessageUseCase: SaveMessageUseCase;
+
+  constructor(io: Server, userRepo: UserRepository, saveMessageUseCase: SaveMessageUseCase) {
+    this.io = io;
+    this.userRepo = userRepo;
+    this.saveMessageUseCase = saveMessageUseCase;
     this.init();
   }
 
@@ -17,7 +20,6 @@ export class ChatGateway {
     this.io.on("connection", (socket: Socket) => {
       console.log("Connected:", socket.id);
 
-      // 1. Join Room
       socket.on("joinRoom", async ({ userName, room }: { userName: string; room: string }) => {
         try {
           const user = userJoin(socket.id, userName, room);
@@ -25,7 +27,6 @@ export class ChatGateway {
 
           await this.userRepo.setOnlineStatus(userName, room, true);
 
-          socket.emit("joinedRoom", { room: user.room });
           socket.emit("message", formatMessage("Chat", "Welcome back!"));
           socket.broadcast
             .to(user.room)
@@ -38,7 +39,6 @@ export class ChatGateway {
         }
       });
 
-      // 2. Typing
       socket.on("typing", (isTyping: boolean) => {
         const user = getCurrentUser(socket.id);
         if (user) {
@@ -46,7 +46,6 @@ export class ChatGateway {
         }
       });
 
-      // 3. Chat Message
       socket.on("chatMessage", async (msg: any) => {
         const user = getCurrentUser(socket.id);
         if (!user) return;
@@ -61,21 +60,12 @@ export class ChatGateway {
         this.io.to(user.room).emit("message", formattedMessage);
 
         try {
-          const dbUser = await this.userRepo.findOneByNameAndRoom(user.userName, user.room);
-          if (dbUser) {
-            await this.messageRepo.createMessage({
-              room: user.room,
-              userId: dbUser.id,
-              content: text,
-              file,
-            });
-          }
+          await this.saveMessageUseCase.execute(user.userName, user.room, text, file);
         } catch (err) {
-          console.error("Error saving message:", err);
+          console.error("Error saving message via UseCase:", err);
         }
       });
 
-      // 4. Disconnect
       socket.on("disconnect", async () => {
         try {
           const user = userLeave(socket.id);
