@@ -1,53 +1,57 @@
-# SkyChat API Documentation
+# SkyChat API Documentation — Mobile App Integration Guide
 
 > **Base URL:** `https://nd1cgptf-3002.uks1.devtunnels.ms`
+>
+> **Socket.IO Server:** same URL (default namespace `/`)
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#1-overview)
+1. [Architecture Overview](#1-architecture-overview)
 2. [REST API Endpoints](#2-rest-api-endpoints)
-   - [2.1 Join / Create Room](#21-join--create-room)
-   - [2.2 Get Room Messages](#22-get-room-messages)
-   - [2.3 Upload File](#23-upload-file)
-   - [2.4 Add Message](#24-add-message)
-3. [WebSocket (Socket.IO) Events](#3-websocket-socketio-events)
-   - [3.1 Client → Server Events](#31-client--server-events)
-   - [3.2 Server → Client Events](#32-server--client-events)
+   - 2.1 [Join / Create Room](#21-join--create-room)
+   - 2.2 [Get Room Messages](#22-get-room-messages)
+   - 2.3 [Upload File](#23-upload-file)
+3. [Socket.IO Events](#3-socketio-events)
+   - 3.1 [Client → Server](#31-client--server)
+   - 3.2 [Server → Client](#32-server--client)
 4. [Data Models](#4-data-models)
-5. [Full User Flow](#5-full-user-flow)
-6. [Error Handling](#6-error-handling)
+5. [Complete User Flow](#5-complete-user-flow)
+6. [Error Handling & Edge Cases](#6-error-handling--edge-cases)
+7. [Flutter Quick Start](#7-flutter-quick-start)
 
 ---
 
-## 1. Overview
+## 1. Architecture Overview
 
-SkyChat is a real-time chat application with the following capabilities:
-
-| Feature | Implementation |
+| Layer | Technology |
 |---|---|
-| Real-time messaging | Socket.IO |
-| Room-based chat rooms | Server-managed rooms |
-| Message persistence | MongoDB |
-| File sharing (images, audio, video, documents) | Cloudinary |
-| Voice recording | Client-side MediaRecorder + Cloudinary |
-| Online/offline user status | MongoDB + Socket.IO |
-| Typing indicators | Socket.IO |
+| **Backend** | Node.js + Express 5 + TypeScript |
+| **Real-time** | Socket.IO |
+| **Database** | MongoDB Atlas (Mongoose ODM) |
+| **File Storage** | Cloudinary |
+| **Architecture Pattern** | Clean Architecture (Domain / Application / Infrastructure / Presentation) |
 
-**Key Technical Notes:**
-- All text messages and file metadata are persisted in MongoDB
-- Files are uploaded to Cloudinary; only the URL + metadata is stored in the DB
-- The server runs Socket.IO on the same port as HTTP (`3002`)
-- Socket.IO uses namespace `/` (default)
+**Key design decisions your Flutter app must follow:**
+
+| Decision | Detail |
+|---|---|
+| **Messages are saved server-side** | When you emit `chatMessage` via Socket.IO, the server auto-saves to MongoDB. Do NOT call REST to save messages. |
+| **Files are two-step** | Step 1: Upload via REST `/upload-file` → get URL. Step 2: Emit `chatMessage` via Socket.IO with file metadata. |
+| **User is auto-created** | `POST /go-to-room` creates the user if they don't exist. Always call this first. |
+| **`userId` can be `null`** | Race condition — if a user disconnects before the message DB write completes, `userId` will be `null`. Handle gracefully. |
+| **No `video` type support** | The current upload endpoint maps `video/*` MIME types to `"file"` (not `"video"`). |
 
 ---
 
 ## 2. REST API Endpoints
 
+---
+
 ### 2.1 Join / Create Room
 
-Registers a user in a room. If the user (name + room combination) already exists, returns the existing user.
+Creates a user + room pair or returns the existing one.
 
 ```
 POST {{base_url}}/go-to-room
@@ -59,52 +63,66 @@ Content-Type: application/json
 }
 ```
 
-**Response `200` (new user created):**
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | `string` | ✅ | Username (unique per room) |
+| `room` | `string` | ✅ | Room/channel name |
+
+**Response `200` — New user created:**
 
 ```json
 {
   "message": "done, user added",
   "data": {
-    "id": "string",
-    "name": "string",
-    "room": "string",
+    "id": "664a1e8fbe67237831a2c738",
+    "name": "john",
+    "room": "General",
     "isOnline": false
   }
 }
 ```
 
-**Response `201` (user already existed):**
+**Response `201` — User already exists:**
 
 ```json
 {
   "message": "user existed",
   "data": {
-    "id": "string",
-    "name": "string",
-    "room": "string",
+    "id": "664a1e8fbe67237831a2c738",
+    "name": "john",
+    "room": "General",
     "isOnline": true
   }
 }
 ```
 
-**Flutter Usage:**
+**Flutter example:**
+
 ```dart
-final response = await http.post(
-  Uri.parse('$baseUrl/go-to-room'),
-  headers: {'Content-Type': 'application/json'},
-  body: jsonEncode({'name': username, 'room': roomName}),
-);
+Future<User> joinRoom(String name, String room) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/go-to-room'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'name': name, 'room': room}),
+  );
+  final body = jsonDecode(response.body);
+  return User.fromJson(body['data']);
+}
 ```
 
 ---
 
 ### 2.2 Get Room Messages
 
-Retrieves all messages for a given room, sorted chronologically (oldest first).
+Returns all persisted messages for a room, sorted oldest-first. Each message's `userId` is a **populated user object** (not just an ID).
 
 ```
 GET {{base_url}}/all-messages-for-room?room={room_name}
 ```
+
+| Query Param | Type | Required | Description |
+|---|---|---|---|
+| `room` | `string` | ✅ | Room name |
 
 **Response `200`:**
 
@@ -113,145 +131,149 @@ GET {{base_url}}/all-messages-for-room?room={room_name}
   "message": "chat found",
   "data": [
     {
-      "id": "string",
-      "content": "string",
-      "room": "string",
+      "_id": "664a1e904d67237831a2c738",
+      "content": "Hello!",
+      "room": "General",
       "userId": {
-        "_id": "string",
-        "name": "string",
-        "room": "string",
+        "_id": "664a1e8fbe67237831a2c738",
+        "name": "john",
+        "room": "General",
         "isOnline": true
       },
       "file": {
-        "url": "string",
-        "publicId": "string",
-        "type": "image | audio | video | file",
-        "name": "string"
+        "url": "https://res.cloudinary.com/.../image/upload/v123/file.png",
+        "publicId": "skychat/abc123",
+        "type": "image",
+        "name": "photo.png"
       },
-      "createdAt": "ISO8601 DateTime"
+      "createdAt": "2026-06-04T09:12:06.885Z",
+      "updatedAt": "2026-06-04T09:12:06.885Z"
     }
   ]
 }
 ```
 
-> **Note:** `userId` is a **populated object** containing the sender's full user data, not just an ID. Each message also includes its MongoDB `id`.
+> ⚠️ **Edge case:** `userId` may be `null` — see [Section 6](#6-error-handling--edge-cases).
 
-> **Edge case:** Messages with `userId: null` exist in the database (race condition when a user disconnects before the message is saved). Your mobile app should handle this gracefully — display them as "Unknown User" or filter them out.
+Use this endpoint to load chat history when the user enters a room.
 
 ---
 
 ### 2.3 Upload File
 
-Uploads a file to Cloudinary and returns the URL and metadata. Supports images, audio, video, and documents.
+Uploads a file to Cloudinary and returns the URL + metadata. After uploading, emit the file metadata via Socket.IO `chatMessage`.
 
 ```
 POST {{base_url}}/upload-file
 Content-Type: multipart/form-data
 
-file: (binary)
+file: (binary data)
 ```
+
+| Form Field | Type | Required | Description |
+|---|---|---|---|
+| `file` | binary | ✅ | The file to upload |
 
 **Response `200`:**
 
 ```json
 {
-  "url": "https://res.cloudinary.com/.../image/upload/v123456/file.png",
+  "url": "https://res.cloudinary.com/dwld0gbaj/image/upload/v123/skychat/abc.png",
   "publicId": "skychat/abc123",
   "type": "image",
   "name": "original_filename.png"
 }
 ```
 
-**`type` mapping based on MIME type:**
+**`type` mapping rules:**
 
-| MIME type | `type` value |
+| Detected MIME | Returned `type` |
 |---|---|
-| `image/*` | `image` |
-| `audio/*` | `audio` |
-| `video/*` | `video` |
-| anything else | `file` |
+| `image/*` | `"image"` |
+| `audio/*` | `"audio"` |
+| `video/*` | **`"file"`** (⚠️ not `"video"`) |
+| everything else | `"file"` |
 
-> ⚠️ **Important:** After uploading, you must **emit a `chatMessage` event via Socket.IO** with the file metadata to broadcast it to the room. The upload endpoint only stores the file — it does **not** send the message.
-
----
-
-### 2.4 Add Message
-
-(Optional — you can rely on Socket.IO for message creation instead.)
-
-Saves a message directly to the database via REST.
-
-```
-POST {{base_url}}/add-message
-Content-Type: application/json
-
-{
-  "name": "string",
-  "room": "string",
-  "content": "string",
-  "file": {
-    "url": "string",
-    "publicId": "string",
-    "type": "image | audio | video | file",
-    "name": "string"
-  }
-}
-```
-
-**Response `200`:**
+**Response `400` — No file:**
 
 ```json
-{
-  "message": "message write done",
-  "data": {
-    "id": "string",
-    "content": "string",
-    "room": "string",
-    "userId": "string",
-    "file": { ... },
-    "createdAt": "ISO8601 DateTime"
-  }
+{ "message": "no file uploaded" }
+```
+
+**Response `500` — Upload error:**
+
+```json
+{ "message": "upload failed" }
+```
+
+**Flutter example:**
+
+```dart
+Future<FileAttachment> uploadFile(File file) async {
+  final request = http.MultipartRequest(
+    'POST',
+    Uri.parse('$baseUrl/upload-file'),
+  );
+  request.files.add(await http.MultipartFile.fromPath('file', file.path));
+  final streamedResponse = await request.send();
+  final response = await http.Response.fromStream(streamedResponse);
+  final body = jsonDecode(response.body);
+  return FileAttachment.fromJson(body);
 }
 ```
 
-> **Note:** The `userId` field here is a plain string ID (not populated). Messages created via Socket.IO (`chatMessage` event) are also persisted automatically — this endpoint is a fallback.
-
 ---
 
-## 3. WebSocket (Socket.IO) Events
+## 3. Socket.IO Events
 
-Socket.IO client library: `socket.io-client` (Dart: `https://pub.dev/packages/socket_io_client`)
-
-### 3.1 Client → Server Events
-
-#### `joinRoom`
-
-Emit when the user enters a chat room. The server will:
-1. Register the user in the in-memory store
-2. Join the Socket.IO room
-3. Set `isOnline = true` in MongoDB
-4. Send previous messages (via `joinedRoom` event)
-5. Notify all room members
+**Package (Dart):** [`socket_io_client`](https://pub.dev/packages/socket_io_client)
 
 ```dart
-socket.emit('joinRoom', {
-  'userName': 'John',
-  'room': 'General',
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+
+IO.Socket socket = IO.io('https://nd1cgptf-3002.uks1.devtunnels.ms', <String, dynamic>{
+  'transports': ['websocket'],
+  'autoConnect': true,
 });
 ```
 
 ---
 
-#### `chatMessage`
+### 3.1 Client → Server
 
-Emit to send a text message or a file message.
+#### `joinRoom`
 
-**Plain text:**
+Emitted right after socket connection to register in a room. The server sets `isOnline: true` and notifies others.
+
 ```dart
-socket.emit('chatMessage', 'Hello everyone!');
+socket.emit('joinRoom', {
+  'userName': 'john',
+  'room': 'General',
+});
 ```
 
-**With file attachment:**
+| Field | Type | Description |
+|---|---|---|
+| `userName` | `string` | Must match the name used in `POST /go-to-room` |
+| `room` | `string` | Must match the room used in `POST /go-to-room` |
+
+---
+
+#### `chatMessage`
+
+Emitted to send a text message or a file message. The server auto-saves to MongoDB and broadcasts to the room.
+
+**Plain text:**
+
+```dart
+socket.emit('chatMessage', {
+  'text': 'Hello everyone!',
+  'file': null,
+});
+```
+
+**With file attachment (must upload first via REST):**
+
 ```dart
 socket.emit('chatMessage', {
   'text': 'Check this out',
@@ -264,78 +286,105 @@ socket.emit('chatMessage', {
 });
 ```
 
-> ⚠️ The file metadata must be obtained first via the `/upload-file` REST endpoint. The Socket.IO event only **broadcasts** the metadata — the actual file is already on Cloudinary.
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `text` | `string` | ✅ | Message text (can be empty `""` if file only) |
+| `file` | `object` | ❌ | `null` or `FileAttachment` object |
 
 ---
 
 #### `typing`
 
-Broadcasts typing status to other users in the room.
+Broadcasts typing status to other users in the same room.
 
 ```dart
-// Start typing
+// User started typing
 socket.emit('typing', true);
 
-// Stop typing
+// User stopped typing
 socket.emit('typing', false);
 ```
 
----
-
-### 3.2 Server → Client Events
-
-#### `joinedRoom`
-
-Sent to the connecting user after they successfully join a room.
-
-```dart
-socket.on('joinedRoom', (data) {
-  print('Joined room: ${data['room']}');
-});
-```
+| Value | Type | Description |
+|---|---|---|
+| `true` | `boolean` | User is typing |
+| `false` | `boolean` | User stopped typing |
 
 ---
+
+### 3.2 Server → Client
 
 #### `message`
 
-Received when a new message is sent in the room (including your own messages).
+Received when any message is sent in the room (including your own).
 
 ```dart
 socket.on('message', (data) {
-  final userName = data['userName'];   // String
-  final text = data['text'];           // String
-  final time = data['time'];           // String (HH:MM format)
-  final file = data['file'];           // Map or null
-
-  // File structure (when present):
-  // file['url']      -> String
-  // file['publicId'] -> String
-  // file['type']     -> String ("image" | "audio" | "video" | "file")
-  // file['name']     -> String
+  final userName = data['userName'] as String;
+  final text     = data['text'] as String;
+  final time     = data['time'] as String;       // "HH:MM" format
+  final file     = data['file'] as Map?;          // null or FileAttachment
 });
 ```
 
-**Special senders:**
-- `userName == "Chat"` — system messages (join/leave notifications, welcome messages). Display differently (centered, muted styling).
+| Field | Type | Description |
+|---|---|---|
+| `userName` | `string` | Sender name, or `"Chat"` for system messages |
+| `text` | `string` | Message content |
+| `time` | `string` | Formatted time (e.g. `"09:12"`) |
+| `file` | `object?` | `null` or `FileAttachment` object |
+
+**System messages** (join/leave/welcome) have `userName: "Chat"`. Display them differently:
+
+```dart
+if (data['userName'] == 'Chat') {
+  // Centered, muted, italic styling
+} else if (data['userName'] == currentUserName) {
+  // Right-aligned, own bubble
+} else {
+  // Left-aligned, other bubble
+}
+```
+
+---
+
+#### `joinedRoom`
+
+Sent to the connecting user after a successful room join.
+
+```dart
+socket.on('joinedRoom', (data) {
+  final room = data['room'] as String;
+  // Now safe to fetch message history
+});
+```
 
 ---
 
 #### `roomUsers`
 
-Received when the user list in the room changes (user joins or leaves).
+Received whenever the user list changes (someone joined or left).
 
 ```dart
 socket.on('roomUsers', (data) {
-  final room = data['room'];           // String
-  final users = data['users'] as List; // List of user objects
+  final room  = data['room'] as String;
+  final users = data['users'] as List;
 
-  // Each user object:
-  // user['id']       -> String
-  // user['name']     -> String
-  // user['room']     -> String
-  // user['isOnline'] -> bool
+  for (var u in users) {
+    final id       = u['id'] as String;
+    final name     = u['name'] as String;
+    final room     = u['room'] as String;
+    final isOnline = u['isOnline'] as bool;
+  }
 });
 ```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | User ID |
+| `name` | `string` | Username |
+| `room` | `string` | Current room |
+| `isOnline` | `bool` | Online/offline status |
 
 ---
 
@@ -345,8 +394,15 @@ Received when another user in the room starts or stops typing.
 
 ```dart
 socket.on('displayTyping', (data) {
-  final userName = data['userName']; // String
-  final isTyping = data['isTyping']; // bool
+  final userName = data['userName'] as String;
+  final isTyping = data['isTyping'] as bool;
+
+  // Show/hide typing indicator
+  if (isTyping) {
+    showTypingIndicator(userName);
+  } else {
+    hideTypingIndicator(userName);
+  }
 });
 ```
 
@@ -358,153 +414,382 @@ socket.on('displayTyping', (data) {
 
 ```json
 {
-  "id": "string",
-  "name": "string",
-  "room": "string",
-  "isOnline": false
+  "id": "664a1e8fbe67237831a2c738",
+  "name": "john",
+  "room": "General",
+  "isOnline": true
 }
 ```
 
-### Message
+**Flutter:**
 
-```json
-{
-  "id": "string",
-  "content": "string",
-  "room": "string",
-  "userId": "string | UserObject",
-  "file": {
-    "url": "string",
-    "publicId": "string",
-    "type": "image | audio | video | file",
-    "name": "string"
-  },
-  "createdAt": "ISO8601 DateTime"
+```dart
+class User {
+  final String id;
+  final String name;
+  final String room;
+  final bool isOnline;
+
+  User({required this.id, required this.name, required this.room, required this.isOnline});
+
+  factory User.fromJson(Map<String, dynamic> json) => User(
+    id: json['id'] ?? json['_id'],
+    name: json['name'],
+    room: json['room'],
+    isOnline: json['isOnline'] ?? false,
+  );
 }
 ```
 
-> `userId` is a string ID when returned from `/add-message` or `createMessage`. It is a **populated UserObject** when returned from `/all-messages-for-room` (Mongoose `.populate()`).
+---
 
 ### FileAttachment
 
 ```json
 {
-  "url": "string",
-  "publicId": "string",
-  "type": "image | audio | video | file",
-  "name": "string"
+  "url": "https://res.cloudinary.com/.../image/upload/v123/skychat/abc.png",
+  "publicId": "skychat/abc123",
+  "type": "image",
+  "name": "photo.png"
 }
 ```
 
-### Socket Message (from `message` event)
+| Field | Type | Values |
+|---|---|---|
+| `type` | `string` | `"image"`, `"audio"`, `"file"` (⚠️ never `"video"`) |
+
+**Flutter:**
+
+```dart
+class FileAttachment {
+  final String url;
+  final String publicId;
+  final String type; // "image" | "audio" | "file"
+  final String name;
+
+  FileAttachment({required this.url, required this.publicId, required this.type, required this.name});
+
+  factory FileAttachment.fromJson(Map<String, dynamic> json) => FileAttachment(
+    url: json['url'],
+    publicId: json['publicId'],
+    type: json['type'],
+    name: json['name'],
+  );
+
+  bool get isImage => type == 'image';
+  bool get isAudio => type == 'audio';
+  bool get isFile => type == 'file';
+}
+```
+
+---
+
+### Message
 
 ```json
 {
-  "userName": "string",
-  "text": "string",
-  "time": "string (HH:MM format)",
-  "file": {
-    "url": "string",
-    "publicId": "string",
-    "type": "image | audio | video | file",
-    "name": "string"
+  "id": "664a1e904d67237831a2c738",
+  "content": "Hello!",
+  "room": "General",
+  "userId": "664a1e8fbe67237831a2c738",
+  "file": { ... },
+  "createdAt": "2026-06-04T09:12:06.885Z"
+}
+```
+
+> `userId` is a **string** when returned from `createMessage` / `SaveMessageUseCase`, but a **populated User object** when returned from `GET /all-messages-for-room`.
+
+**Flutter:**
+
+```dart
+class ChatMessage {
+  final String id;
+  final String content;
+  final String room;
+  final String userId;
+  final String? userName;  // extracted from populated userId object
+  final FileAttachment? file;
+  final DateTime createdAt;
+
+  ChatMessage({...});
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    // userId may be a String OR a populated object
+    String userId;
+    String? userName;
+
+    if (json['userId'] is Map) {
+      userId = json['userId']['_id'];
+      userName = json['userId']['name'];
+    } else {
+      userId = json['userId'] ?? '';
+      userName = null;
+    }
+
+    return ChatMessage(
+      id: json['id'] ?? json['_id'],
+      content: json['content'] ?? '',
+      room: json['room'],
+      userId: userId,
+      userName: userName,
+      file: json['file'] != null && json['file'].isNotEmpty
+          ? FileAttachment.fromJson(json['file'])
+          : null,
+      createdAt: DateTime.parse(json['createdAt']),
+    );
   }
 }
 ```
 
 ---
 
-## 5. Full User Flow
+### SocketMessage (from `message` event)
 
-```
-┌─────────────┐          ┌──────────────┐          ┌───────────────┐
-│  Mobile App │          │  REST API    │          │  Socket.IO    │
-└──────┬──────┘          └──────┬───────┘          └───────┬───────┘
-       │                        │                          │
-       │  POST /go-to-room      │                          │
-       │───────────────────────>│                          │
-       │<───────────────────────│                          │
-       │                        │                          │
-       │  socket.connect()      │                          │
-       │──────────────────────────────────────────────────>│
-       │                        │                          │
-       │  emit("joinRoom")      │                          │
-       │──────────────────────────────────────────────────>│
-       │                        │                          │
-       │  on("joinedRoom")      │                          │
-       │<──────────────────────────────────────────────────│
-       │                        │                          │
-       │  on("roomUsers")       │                          │
-       │<──────────────────────────────────────────────────│
-       │                        │                          │
-       │  GET /all-messages-    │                          │
-       │  for-room?room=General │                          │
-       │───────────────────────>│                          │
-       │<───────────────────────│                          │
-       │                        │                          │
-       │  ─── User sends text ──│                          │
-       │                        │                          │
-       │  emit("chatMessage",   │                          │
-       │    "Hello")            │                          │
-       │──────────────────────────────────────────────────>│
-       │                        │                          │
-       │  on("message")         │                          │
-       │<──────────────────────────────────────────────────│
-       │                        │                          │
-       │  ─── User sends file ──│                          │
-       │                        │                          │
-       │  POST /upload-file     │                          │
-       │  (multipart)           │                          │
-       │───────────────────────>│                          │
-       │<───────────────────────│                          │
-       │  {url, publicId,       │                          │
-       │   type, name}          │                          │
-       │                        │                          │
-       │  emit("chatMessage", { │                          │
-       │    text: "Look!",      │                          │
-       │    file: { url, ... }  │                          │
-       │  })                    │                          │
-       │──────────────────────────────────────────────────>│
-       │                        │                          │
-       │  on("message")         │                          │
-       │<──────────────────────────────────────────────────│
+```json
+{
+  "userName": "john",
+  "text": "Hello!",
+  "time": "09:12",
+  "file": { "url": "...", "publicId": "...", "type": "image", "name": "photo.png" }
+}
 ```
 
 ---
 
-## 6. Error Handling
+## 5. Complete User Flow
 
-### HTTP Status Codes
-
-| Code | Meaning |
-|---|---|
-| `200` | Success |
-| `201` | Success — user already existed |
-| `400` | Bad request — missing or invalid parameters |
-| `404` | User not found (usually on `/add-message`) |
-| `500` | Server error — upload failed, DB error |
-
-### Common Issues
-
-**1. Messages with `userId: null`**
-
-These occur when a user disconnects before their chat message is saved to MongoDB. The message still exists but has no associated user. Handle in the app:
-```dart
-final senderName = msg['userId']?['name'] ?? 'Unknown User';
+```
+┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
+│   Flutter App    │          │    REST API      │          │   Socket.IO      │
+└────────┬─────────┘          └────────┬─────────┘          └────────┬─────────┘
+         │                             │                             │
+         │  1. POST /go-to-room        │                             │
+         │  { name, room }             │                             │
+         ├────────────────────────────►│                             │
+         │◄────────────────────────────┤                             │
+         │   { user, existed }         │                             │
+         │                             │                             │
+         │  2. Connect Socket.IO       │                             │
+         ├──────────────────────────────────────────────────────────►│
+         │                             │                             │
+         │  3. emit("joinRoom",        │                             │
+         │     { userName, room })     │                             │
+         ├──────────────────────────────────────────────────────────►│
+         │                             │                             │
+         │  4. on("joinedRoom")        │                             │
+         │◄──────────────────────────────────────────────────────────┤
+         │                             │                             │
+         │  5. GET /all-messages-      │                             │
+         │     for-room?room=General   │                             │
+         ├────────────────────────────►│                             │
+         │◄────────────────────────────┤                             │
+         │   [message history]         │                             │
+         │                             │                             │
+         │  6. on("roomUsers")         │                             │
+         │◄──────────────────────────────────────────────────────────┤
+         │                             │                             │
+         ║ ─── User sends text ─────── ║                             │
+         │                             │                             │
+         │  7. emit("chatMessage",     │                             │
+         │     { text: "Hi",           │                             │
+         │       file: null })         │                             │
+         ├──────────────────────────────────────────────────────────►│
+         │                             │                             │
+         │  8. on("message")           │                             │
+         │◄──────────────────────────────────────────────────────────┤
+         │                             │                             │
+         ║ ─── User sends file ─────── ║                             │
+         │                             │                             │
+         │  9. POST /upload-file       │                             │
+         │     (multipart)             │                             │
+         ├────────────────────────────►│                             │
+         │◄────────────────────────────┤                             │
+         │   { url, publicId, type,    │                             │
+         │     name }                  │                             │
+         │                             │                             │
+         │  10. emit("chatMessage",    │                             │
+         │      { text: "Look!",       │                             │
+         │        file: { url, ... }   │                             │
+         │      })                     │                             │
+         ├──────────────────────────────────────────────────────────►│
+         │                             │                             │
+         │  11. on("message")          │                             │
+         │◄──────────────────────────────────────────────────────────┤
 ```
 
-**2. File upload fails**
+---
 
-Cloudinary upload may fail for very large files or unsupported formats. The server returns `500` with `{"message": "upload failed"}`.
+## 6. Error Handling & Edge Cases
 
-**3. Socket disconnection**
+### 6.1 `userId` is `null` in message history
 
-Implement Socket.IO reconnection handling:
+Some messages in the database have `userId: null` due to a race condition (user disconnects before the message is saved). Handle in Flutter:
+
+```dart
+final userName = msg['userId']?['name'] ?? 'Unknown';
+```
+
+### 6.2 Empty file object `{}`
+
+Some old messages have `"file": {}` (empty map) instead of `null`. Check:
+
+```dart
+final file = msg['file'];
+if (file != null && file is Map && file.isNotEmpty) {
+  // Has file attachment
+} else {
+  // No file
+}
+```
+
+### 6.3 Socket disconnection
+
+Implement reconnection handling:
+
 ```dart
 socket.on('disconnect', (_) {
-  // Show reconnection overlay
+  // Show "Reconnecting..." overlay
 });
+
 socket.on('reconnect', (_) {
-  // Re-join room and refresh messages
+  // Re-emit joinRoom and refetch messages
+  socket.emit('joinRoom', {'userName': name, 'room': room});
+  fetchMessages();
 });
+```
+
+### 6.4 File upload fails
+
+Cloudinary may reject very large files, unsupported formats, or network timeouts. Always wrap in try/catch:
+
+```dart
+try {
+  final file = await uploadFile(localFile);
+  // Emit chatMessage with file
+} catch (e) {
+  // Show error toast
+}
+```
+
+### 6.5 No `video` type support
+
+The current server maps `video/*` MIME types to `"file"` (not `"video"`). If your app needs video display, either:
+- Treat `type == "file"` with a video extension as a video, or
+- Modify the server to add `"video"` detection
+
+---
+
+## 7. Flutter Quick Start
+
+### Dependencies
+
+```yaml
+dependencies:
+  socket_io_client: ^3.0.2
+  http: ^1.4.0
+```
+
+### Chat Service Example
+
+```dart
+import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+
+class ChatService {
+  static const String baseUrl = 'https://nd1cgptf-3002.uks1.devtunnels.ms';
+
+  late final IO.Socket socket;
+  String? currentUserName;
+  String? currentRoom;
+
+  // ── REST ──
+
+  Future<User> joinRoom(String name, String room) async {
+    currentUserName = name;
+    currentRoom = room;
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/go-to-room'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name, 'room': room}),
+    );
+
+    return User.fromJson(jsonDecode(response.body)['data']);
+  }
+
+  Future<List<ChatMessage>> getMessages(String room) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/all-messages-for-room?room=$room'),
+    );
+
+    final List data = jsonDecode(response.body)['data'];
+    return data.map((e) => ChatMessage.fromJson(e)).toList();
+  }
+
+  Future<FileAttachment> uploadFile(File file) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/upload-file'),
+    );
+    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    return FileAttachment.fromJson(jsonDecode(response.body));
+  }
+
+  // ── Socket.IO ──
+
+  void connect() {
+    socket = IO.io(baseUrl, <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': true,
+    });
+
+    socket.onConnect((_) {
+      print('Connected');
+      socket.emit('joinRoom', {
+        'userName': currentUserName,
+        'room': currentRoom,
+      });
+    });
+
+    socket.on('message', (data) {
+      // Handle incoming message
+      final userName = data['userName'] as String;
+      final text = data['text'] as String;
+      final file = data['file'] != null ? FileAttachment.fromJson(data['file']) : null;
+      print('Message from $userName: $text');
+    });
+
+    socket.on('roomUsers', (data) {
+      // Update user list
+    });
+
+    socket.on('displayTyping', (data) {
+      // Show/hide typing indicator
+    });
+  }
+
+  void sendMessage(String text, {FileAttachment? file}) {
+    socket.emit('chatMessage', {
+      'text': text,
+      'file': file != null ? {
+        'url': file.url,
+        'publicId': file.publicId,
+        'type': file.type,
+        'name': file.name,
+      } : null,
+    });
+  }
+
+  void sendTyping(bool isTyping) {
+    socket.emit('typing', isTyping);
+  }
+
+  void disconnect() {
+    socket.disconnect();
+  }
+}
 ```
