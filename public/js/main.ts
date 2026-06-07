@@ -253,7 +253,7 @@ chatForm.addEventListener("submit", async (e: Event) => {
 interface FileAttachment {
   url: string;
   publicId: string;
-  type: "image" | "file" | "audio" | "video" | "pdf";
+  type: "image" | "file" | "audio" | "video";
   name: string;
 }
 
@@ -262,6 +262,29 @@ interface ChatMessage {
   text: string;
   time: string;
   file?: FileAttachment;
+}
+
+(window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
+
+async function renderPdfPages(container: HTMLElement, url: string): Promise<void> {
+  try {
+    const pdf = await (window as any).pdfjsLib.getDocument(url).promise;
+    const totalPages = pdf.numPages;
+    const scale = 0.5;
+    for (let i = 1; i <= totalPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      canvas.className = "pdf-page";
+      const ctx = canvas.getContext("2d")!;
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      container.appendChild(canvas);
+    }
+  } catch (err) {
+    console.error("PDF render error:", err);
+  }
 }
 
 function outputMessage(message: ChatMessage): void {
@@ -286,9 +309,10 @@ function outputMessage(message: ChatMessage): void {
         <audio controls src="${message.file.url}" class="chat-audio"></audio>
       </div>`;
     } else if (message.file.type === "video") {
-      fileHtml = `<div class="file-attachment"><video controls src="${message.file.url}" class="chat-video"></video></div>`;
-    } else if (message.file.type === "pdf") {
-      fileHtml = `<div class="file-attachment pdf-attachment"><iframe src="${message.file.url}" class="chat-pdf"></iframe><a href="${message.file.url}" target="_blank" rel="noopener noreferrer" class="file-link"><i class="fas fa-external-link-alt"></i> Open PDF</a></div>`;
+      const posterUrl = message.file.url.replace(/\.\w+$/, ".jpg");
+      fileHtml = `<div class="file-attachment video-attachment"><div class="video-wrapper"><video poster="${posterUrl}" src="${message.file.url}" class="chat-video" preload="none" playsinline></video><div class="play-overlay"><i class="fas fa-play"></i></div></div></div>`;
+    } else if (message.file.name?.toLowerCase().endsWith(".pdf")) {
+      fileHtml = `<div class="file-attachment pdf-attachment"><a href="${message.file.url}" target="_blank" rel="noopener noreferrer" class="file-link"><i class="fas fa-file-pdf" style="font-size:20px;color:#ef4444"></i> ${message.file.name}</a><div class="pdf-pages" data-pdf-url="${message.file.url}"></div></div>`;
     } else {
       fileHtml = `<div class="file-attachment"><a href="${message.file.url}" target="_blank" rel="noopener noreferrer" class="file-link"><i class="fas fa-file"></i> ${message.file.name}</a></div>`;
     }
@@ -300,6 +324,36 @@ function outputMessage(message: ChatMessage): void {
   ${fileHtml}
   ${textHtml}`;
   document.querySelector(".chat-messages")!.appendChild(div);
+  const pdfContainer = div.querySelector(".pdf-pages") as HTMLElement;
+  if (pdfContainer) {
+    renderPdfPages(pdfContainer, pdfContainer.dataset.pdfUrl!);
+  }
+  const videoWrapper = div.querySelector(".video-wrapper") as HTMLElement;
+  if (videoWrapper) {
+    const video = videoWrapper.querySelector("video")!;
+    const overlay = videoWrapper.querySelector(".play-overlay") as HTMLElement;
+    videoWrapper.addEventListener("click", () => {
+      if (video.paused) {
+        video.play();
+        overlay.classList.add("playing");
+        video.setAttribute("controls", "controls");
+      } else {
+        video.pause();
+        overlay.classList.remove("playing");
+      }
+    });
+    video.addEventListener("play", () => overlay.classList.add("playing"));
+    video.addEventListener("pause", () => {
+      if (video.currentTime === 0 || video.ended) {
+        overlay.classList.remove("playing");
+        video.removeAttribute("controls");
+      }
+    });
+    video.addEventListener("ended", () => {
+      overlay.classList.remove("playing");
+      video.removeAttribute("controls");
+    });
+  }
 }
 
 function outputRoomName(room: string): void {

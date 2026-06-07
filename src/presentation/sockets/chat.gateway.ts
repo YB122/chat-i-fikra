@@ -27,6 +27,7 @@ export class ChatGateway {
 
           await this.userRepo.setOnlineStatus(userName, room, true);
 
+          socket.emit("joinedRoom");
           socket.emit("message", formatMessage("Chat", "Welcome back!"));
           socket.broadcast
             .to(user.room)
