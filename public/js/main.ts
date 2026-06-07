@@ -253,7 +253,7 @@ chatForm.addEventListener("submit", async (e: Event) => {
 interface FileAttachment {
   url: string;
   publicId: string;
-  type: "image" | "file" | "audio" | "video";
+  type: "image" | "file" | "audio" | "video" | "pdf";
   name: string;
 }
 
@@ -287,6 +287,8 @@ function outputMessage(message: ChatMessage): void {
       </div>`;
     } else if (message.file.type === "video") {
       fileHtml = `<div class="file-attachment"><video controls src="${message.file.url}" class="chat-video"></video></div>`;
+    } else if (message.file.type === "pdf") {
+      fileHtml = `<div class="file-attachment pdf-attachment"><iframe src="${message.file.url}" class="chat-pdf"></iframe><a href="${message.file.url}" target="_blank" rel="noopener noreferrer" class="file-link"><i class="fas fa-external-link-alt"></i> Open PDF</a></div>`;
     } else {
       fileHtml = `<div class="file-attachment"><a href="${message.file.url}" target="_blank" rel="noopener noreferrer" class="file-link"><i class="fas fa-file"></i> ${message.file.name}</a></div>`;
     }
