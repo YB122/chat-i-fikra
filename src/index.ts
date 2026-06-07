@@ -22,17 +22,14 @@ app.use(express.static(path.join(__dirname, "../public")));
 
 dataBaseConnection();
 
-// 1. Infrastructure Instances
 const userRepository = new MongoUserRepository();
 const messageRepository = new MongoMessageRepository();
 const cloudinaryService = new CloudinaryService();
 
-// 2. Application Use Cases Instances
 const goToRoomUseCase = new GoToRoomUseCase(userRepository);
 const saveMessageUseCase = new SaveMessageUseCase(messageRepository, userRepository);
 const getRoomMessagesUseCase = new GetRoomMessagesUseCase(messageRepository);
 
-// 3. Presentation Controller (نمرر له الـ 2 use cases والـ service)
 const chatController = new ChatController(goToRoomUseCase, getRoomMessagesUseCase, cloudinaryService);
 
 app.use(createRoutes(chatController));
@@ -43,5 +40,4 @@ const server = app.listen(3002, () => {
 
 const io = new Server(server, { cors: { origin: "*" } });
 
-// 4. Presentation Sockets Gateway
 new ChatGateway(io, userRepository, saveMessageUseCase);
