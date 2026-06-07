@@ -272,7 +272,7 @@ function outputMessage(message) {
             fileHtml = `<div class="file-attachment video-attachment"><div class="video-wrapper"><video poster="${posterUrl}" src="${message.file.url}" class="chat-video" preload="none" playsinline></video><div class="play-overlay"><i class="fas fa-play"></i></div></div></div>`;
         }
         else if (message.file.name?.toLowerCase().endsWith(".pdf")) {
-            fileHtml = `<div class="file-attachment pdf-attachment"><a href="${message.file.url}" target="_blank" rel="noopener noreferrer" class="file-link"><i class="fas fa-file-pdf" style="font-size:20px;color:#ef4444"></i> ${message.file.name}</a><div class="pdf-pages" data-pdf-url="${message.file.url}"></div></div>`;
+            fileHtml = `<div class="file-attachment pdf-attachment"><a href="#" class="file-link pdf-download" data-url="${message.file.url}" data-filename="${message.file.name}"><i class="fas fa-file-pdf" style="font-size:20px;color:#ef4444"></i> ${message.file.name}</a><div class="pdf-pages" data-pdf-url="${message.file.url}"></div></div>`;
         }
         else {
             fileHtml = `<div class="file-attachment"><a href="${message.file.url}" target="_blank" rel="noopener noreferrer" class="file-link"><i class="fas fa-file"></i> ${message.file.name}</a></div>`;
@@ -312,6 +312,29 @@ function outputMessage(message) {
         video.addEventListener("ended", () => {
             overlay.classList.remove("playing");
             video.removeAttribute("controls");
+        });
+    }
+    const pdfLink = div.querySelector(".pdf-download");
+    if (pdfLink) {
+        pdfLink.addEventListener("click", async (e) => {
+            e.preventDefault();
+            const url = pdfLink.dataset.url;
+            const filename = pdfLink.dataset.filename;
+            try {
+                const res = await fetch(url);
+                const blob = await res.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(blobUrl);
+            }
+            catch (err) {
+                window.open(url, "_blank");
+            }
         });
     }
 }

@@ -13,9 +13,9 @@ export class CloudinaryService {
   async uploadBuffer(buffer: Buffer, mimetype: string): Promise<any> {
     const fileStr = buffer.toString("base64");
     const dataUri = `data:${mimetype};base64,${fileStr}`;
-    const resourceType = mimetype === "application/pdf" ? "raw" : "auto";
+    const isPdf = mimetype === "application/pdf";
     return await cloudinary.uploader.upload(dataUri, {
-      resource_type: resourceType,
+      resource_type: isPdf ? "raw" : "auto",
       folder: "skychat",
     });
   }
