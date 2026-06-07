@@ -42,10 +42,15 @@ export class ChatController {
       const uploadResult = await this.cloudinaryService.uploadBuffer(req.file.buffer, req.file.mimetype);
       const mime = req.file.mimetype;
 
+      let fileType: string = "file";
+      if (mime.startsWith("image/")) fileType = "image";
+      else if (mime.startsWith("audio/")) fileType = "audio";
+      else if (mime === "application/pdf") fileType = "pdf";
+
       return res.status(200).json({
         url: uploadResult.secure_url,
         publicId: uploadResult.public_id,
-        type: mime.startsWith("image/") ? "image" : mime.startsWith("audio/") ? "audio" : "file",
+        type: fileType,
         name: req.file.originalname,
       });
     } catch (error) {
